@@ -6,8 +6,8 @@ const { User } = require('../../models/user');
 describe('auth middleware', () => {
     beforeEach(() => server = require('../../index'));
     afterEach(async () => {
-        server.close();
         await Genre.deleteMany({})
+        await server.close();
     });
 
     let token;

@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Fawn = require('fawn');
 const { Rental } = require('../models/rental');
+const { Movie } = require('../models/movie');
 const { getMovie } = require('./movies');
 const { getCustomer } = require('./customers');
 const { throwError } = require('../shared/misc');
@@ -71,46 +72,26 @@ async function getRental(id) {
 module.exports.getRental = getRental;
 
 
-// Not working - functionality must be defined, how do we handle returns
-async function updateRental(id, { customerId, movieId }) {
-    if (!mongoose.Types.ObjectId.isValid(id))
-        throwError(400, 'Invalid id format');
-
-    // Validate customer
+async function updateRental({ customerId, movieId }) {
     if (!mongoose.Types.ObjectId.isValid(customerId))
         throwError(400, 'Invalid id format for customer.');
 
-    const customer = await getCustomer(customerId);
-    if (!customer) throwError(404, `Customer with ID ${customerId} not found.`);
-
-    // Validate movie
     if (!mongoose.Types.ObjectId.isValid(movieId))
         throwError(400, 'Invalid id format for movie.');
 
-    const movie = await getMovie(movieId);
-    if (!movie) throwError(404, `Movie with ID ${movieId} not found.`);
+    const rental = await Rental.lookup({ customerId, movieId });
+
+    if (!rental) throwError(404, `Rental for customer ID ${customerId} and movie ID ${movieId} not found.`);
+    if (rental.dateReturned) throwError(400, `Rental for customer ID ${customerId} and movie ID ${movieId} already returned.`);
+
+    rental.return();
+    await rental.save();
+
+    await Movie.updateOne({ _id: rental.movie._id }, {
+        $inc: { numberInStock: 1 }
+    });
     
-    
-    return await Rental
-        .findByIdAndUpdate(id, {
-            customer: {
-                _id: customer._id,
-                name: customer.name,
-                phone: customer.phone,
-                isGold: customer.isGold
-            },
-            movie: {
-                _id: movie._id,
-                title: movie.title,
-                dailyRentalRate: movie.dailyRentalRate
-            },
-            dateOut: newRental.dateOut,
-            dateReturned: newRental.dateReturned,
-            rentalFee: newRental.rentalFee
-        }, {
-            new: true,
-            runValidators: true
-        });
+    return rental;
 }
 module.exports.updateRental = updateRental;
 
